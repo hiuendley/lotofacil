@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const API_URL = import.meta.env.VITE_API_URL || "https://lotofacil-goin.onrender.com";
 const THEME_KEY = "mentalidade-theme";
 
 // ── Temas minimalistas ─────────────────────────────────────────────────────────
