@@ -12,26 +12,63 @@ const BONUS_QUANTIDADE = {
   20: 46,
 };
 
+// ── Classificação de score conforme tabela oficial ────────────────────────────
+// Score 0–200 (conforme imagem do sistema)
 function classificarScore(score) {
   if (score <= 75) {
-    return { label: 'CRÍTICO', emoji: '🟣', descricao: 'Jogo muito fraco para os padrões estatísticos.', cor: '#6A0DAD' };
+    return {
+      label: 'CRÍTICO',
+      emoji: '🟣',
+      descricao: 'Jogo muito fraco para os padrões estatísticos.',
+      cor: '#7C3AED',        // violeta
+    };
   }
   if (score <= 90) {
-    return { label: 'PÉSSIMO', emoji: '🔴', descricao: 'Jogo abaixo do mínimo recomendado.', cor: '#FF3B3B' };
+    return {
+      label: 'PÉSSIMO',
+      emoji: '🔴',
+      descricao: 'Jogo abaixo do mínimo recomendado.',
+      cor: '#EF4444',        // vermelho
+    };
   }
   if (score <= 110) {
-    return { label: 'RUIM', emoji: '🟠', descricao: 'Jogo fora de boa parte dos padrões históricos.', cor: '#FF8C00' };
+    return {
+      label: 'RUIM',
+      emoji: '🟠',
+      descricao: 'Jogo fora de boa parte dos padrões históricos.',
+      cor: '#F97316',        // laranja
+    };
   }
   if (score <= 120) {
-    return { label: 'BOM', emoji: '🔵', descricao: 'Jogo aceitável, com base estatística razoável.', cor: '#3B82F6' };
+    return {
+      label: 'BOM',
+      emoji: '🔵',
+      descricao: 'Jogo aceitável, com base estatística razoável.',
+      cor: '#3B82F6',        // azul
+    };
   }
   if (score <= 140) {
-    return { label: 'MUITO BOM', emoji: '🟢', descricao: 'Jogo consistente e bem equilibrado.', cor: '#7CFF7C' };
+    return {
+      label: 'MUITO BOM',
+      emoji: '🟢',
+      descricao: 'Jogo consistente e bem equilibrado.',
+      cor: '#4ADE80',        // verde claro
+    };
   }
   if (score <= 180) {
-    return { label: 'ÓTIMO', emoji: '💚', descricao: 'Jogo forte dentro dos filtros principais.', cor: '#39FF14' };
+    return {
+      label: 'ÓTIMO',
+      emoji: '💚',
+      descricao: 'Jogo forte dentro dos filtros principais.',
+      cor: '#22C55E',        // verde neon
+    };
   }
-  return { label: 'OURO', emoji: '🏆', descricao: 'Jogo premium com cobertura estatística máxima.', cor: '#FFD700' };
+  return {
+    label: 'EXCELENTE',
+    emoji: '🏆',
+    descricao: 'Jogo premium com cobertura estatística máxima!',
+    cor: '#EAB308',          // ouro
+  };
 }
 
 function buildJanelaMensagem(janelaAtual, temJ04, temJ05) {
