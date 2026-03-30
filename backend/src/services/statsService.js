@@ -1,4 +1,4 @@
-const { calcDesvioPadrao } = require('../utils/lotofacilCalc');
+const { calcDesvioPadrao, calcSoma, calcPares, calcQuadrantes } = require('../utils/lotofacilCalc');
 
 const QUADRANTES_NOMES = ['01–05', '06–10', '11–15', '16–20', '21–25'];
 const SOMA_FAIXAS = [
@@ -22,51 +22,60 @@ const DP_FAIXAS = [
 ];
 
 function pct(count, total) {
-  return total ? Number(((count / total) * 100).toFixed(3)) : 0;
+  return total ? Number(((count / total) * 100).toFixed(2)) : 0;
+}
+
+function media(values, decimals = 2) {
+  if (!values.length) return 0;
+  return Number((values.reduce((acc, value) => acc + value, 0) / values.length).toFixed(decimals));
 }
 
 function formatPadraoPares(qtdPares) {
   return `${qtdPares}P/${15 - qtdPares}I`;
 }
 
+function rangeToLabel([min, max]) {
+  return `${min}-${max}`;
+}
+
 function calcQuadrantesDeJogo(dezenas) {
-  return [
-    dezenas.filter(n => n >= 1 && n <= 5).length,
-    dezenas.filter(n => n >= 6 && n <= 10).length,
-    dezenas.filter(n => n >= 11 && n <= 15).length,
-    dezenas.filter(n => n >= 16 && n <= 20).length,
-    dezenas.filter(n => n >= 21 && n <= 25).length,
-  ];
+  return calcQuadrantes(dezenas);
 }
 
 function calcularCiclos(resultados) {
-  let ciclo = 1;
-  let dezenasVistas = new Set();
+  const concursosOrdenados = [...resultados].sort((a, b) => a.concurso - b.concurso);
+  let numeroCiclo = 1;
+  let vistasNoCiclo = new Set();
   let concursosNoCiclo = 0;
-  const resultadoFinal = [];
+  const ciclos = [];
 
-  for (const concurso of [...resultados].sort((a, b) => a.concurso - b.concurso)) {
-    concursosNoCiclo++;
-    concurso.dezenas.forEach(d => dezenasVistas.add(d));
-    const cicloFechado = dezenasVistas.size === 25;
+  for (const concurso of concursosOrdenados) {
+    concursosNoCiclo += 1;
+    concurso.dezenas.forEach(dezena => vistasNoCiclo.add(dezena));
 
-    resultadoFinal.push({
+    const dezenasVistasNoCiclo = Array.from(vistasNoCiclo).sort((a, b) => a - b);
+    const dezenasFaltantes = Array.from({ length: 25 }, (_, index) => index + 1)
+      .filter(dezena => !vistasNoCiclo.has(dezena));
+    const cicloFechado = dezenasFaltantes.length === 0;
+
+    ciclos.push({
       ...concurso,
-      ciclo,
+      ciclo: numeroCiclo,
       concursosNoCiclo,
       cicloFechado,
-      faltamParaFechar: 25 - dezenasVistas.size,
-      dezenasVistasNoCiclo: Array.from(dezenasVistas).sort((a, b) => a - b),
+      dezenasVistasNoCiclo,
+      dezenasFaltantesNoCiclo: dezenasFaltantes,
+      faltamParaFechar: dezenasFaltantes.length,
     });
 
     if (cicloFechado) {
-      ciclo++;
-      dezenasVistas = new Set();
+      numeroCiclo += 1;
+      vistasNoCiclo = new Set();
       concursosNoCiclo = 0;
     }
   }
 
-  return resultadoFinal;
+  return ciclos;
 }
 
 function validarCiclos(resultadosComCiclo) {
@@ -88,6 +97,7 @@ function validarCiclos(resultadosComCiclo) {
     if (!r.cicloFechado && dezenasVistas.size === 25) {
       erros.push({ concurso: r.concurso, tipo: 'FECHAMENTO_NAO_MARCADO' });
     }
+
     if (r.cicloFechado) {
       dezenasVistas = new Set();
     }
@@ -100,6 +110,7 @@ function gerarAlertaValidacao(validacao) {
   if (validacao.valido) {
     return { status: 'OK', mensagem: 'Ciclos consistentes', nivel: 'sucesso' };
   }
+
   return {
     status: 'ERRO',
     mensagem: 'Inconsistência detectada nos ciclos',
@@ -110,19 +121,19 @@ function gerarAlertaValidacao(validacao) {
 
 function calcAusenciaAtual(resultados, par) {
   let streak = 0;
-  for (let i = resultados.length - 1; i >= 0; i--) {
-    const ok = par.every(d => resultados[i].dezenas.includes(d));
-    if (ok) break;
-    streak++;
+  for (let index = resultados.length - 1; index >= 0; index -= 1) {
+    const aparece = par.every(dezena => resultados[index].dezenas.includes(dezena));
+    if (aparece) break;
+    streak += 1;
   }
   return streak;
 }
 
 function calcJanelaStats(resultados, par) {
   const total = resultados.length;
-  const concursosComPar = resultados.filter(r => par.every(d => r.dezenas.includes(d))).length;
+  const concursosComPar = resultados.filter(resultado => par.every(dezena => resultado.dezenas.includes(dezena))).length;
   const frequencia = pct(concursosComPar, total);
-  const probBase = 35; // combinação aleatória de 15 dezenas contendo um par específico
+  const probBase = 35;
   const ganhoProbabilidadePct = Number((((frequencia / probBase) - 1) * 100).toFixed(3));
 
   return {
@@ -135,102 +146,135 @@ function calcJanelaStats(resultados, par) {
 
 function getHistorico(resultados) {
   const total = resultados.length;
-  const comCiclos = calcularCiclos(resultados);
-  const ultimo = comCiclos[comCiclos.length - 1] ?? null;
-  const penultimo = comCiclos[comCiclos.length - 2] ?? null;
+  const concursosOrdenados = [...resultados].sort((a, b) => a.concurso - b.concurso);
+  const comCiclos = calcularCiclos(concursosOrdenados);
+  const ultimoConcursoProcessado = comCiclos[comCiclos.length - 1] ?? null;
+  const ultimoResultado = concursosOrdenados[concursosOrdenados.length - 1] ?? null;
+  const penultimoResultado = concursosOrdenados[concursosOrdenados.length - 2] ?? null;
 
-  const somaValores = resultados.map(r => r.dezenas.reduce((acc, n) => acc + n, 0));
-  const somaMedia = Number((somaValores.reduce((a, b) => a + b, 0) / total).toFixed(1));
-  const somaMin = Math.min(...somaValores);
-  const somaMax = Math.max(...somaValores);
-  const somaFaixas = SOMA_FAIXAS.map(([min, max]) => ({
-    faixa: `${min}-${max}`,
-    pct: pct(somaValores.filter(s => s >= min && s <= max).length, total),
-  }));
+  const ciclosFechados = comCiclos.filter(item => item.cicloFechado);
+  const ciclosCompletos = ciclosFechados.length;
+  const ultimoCicloFechado = ciclosFechados[ciclosFechados.length - 1] ?? null;
+  const numeroCicloAtual = ultimoConcursoProcessado?.cicloFechado
+    ? (ultimoConcursoProcessado.ciclo + 1)
+    : (ultimoConcursoProcessado?.ciclo ?? 1);
+
+  const dezenasJaSairamNoCicloAtual = ultimoConcursoProcessado?.cicloFechado
+    ? []
+    : (ultimoConcursoProcessado?.dezenasVistasNoCiclo ?? []);
+  const dezenasFaltantesCiclo = ultimoConcursoProcessado?.cicloFechado
+    ? Array.from({ length: 25 }, (_, index) => index + 1)
+    : (ultimoConcursoProcessado?.dezenasFaltantesNoCiclo ?? Array.from({ length: 25 }, (_, index) => index + 1));
+  const concursosNoCicloAtual = ultimoConcursoProcessado?.cicloFechado ? 0 : (ultimoConcursoProcessado?.concursosNoCiclo ?? 0);
+
+  const somaValores = concursosOrdenados.map(resultado => calcSoma(resultado.dezenas));
+  const paresPorConcurso = concursosOrdenados.map(resultado => calcPares(resultado.dezenas));
+  const imparesPorConcurso = paresPorConcurso.map(pares => 15 - pares);
+  const dps = concursosOrdenados.map(resultado => calcDesvioPadrao(resultado.dezenas));
+
+  const somaFaixas = SOMA_FAIXAS.map(range => {
+    const [min, max] = range;
+    const count = somaValores.filter(soma => soma >= min && soma <= max).length;
+    return { faixa: rangeToLabel(range), pct: pct(count, total), ocorrencias: count };
+  });
+  const somaFaixaMaisRecorrente = [...somaFaixas].sort((a, b) => b.ocorrencias - a.ocorrencias)[0] ?? null;
 
   const paresCounter = new Map();
-  resultados.forEach(r => {
-    const pares = r.dezenas.filter(n => n % 2 === 0).length;
-    paresCounter.set(pares, (paresCounter.get(pares) ?? 0) + 1);
+  paresPorConcurso.forEach(qtdPares => {
+    paresCounter.set(qtdPares, (paresCounter.get(qtdPares) ?? 0) + 1);
   });
   const paresDistribuicao = [...paresCounter.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([pares, count]) => ({ padrao: formatPadraoPares(pares), pct: pct(count, total) }));
+    .map(([pares, count]) => ({
+      pares,
+      impares: 15 - pares,
+      padrao: formatPadraoPares(pares),
+      pct: pct(count, total),
+      ocorrencias: count,
+    }));
+  const padraoParesMaisRecorrente = [...paresDistribuicao].sort((a, b) => b.ocorrencias - a.ocorrencias)[0] ?? null;
 
-  const freq = {};
-  for (let d = 1; d <= 25; d++) {
-    const count = resultados.filter(r => r.dezenas.includes(d)).length;
-    freq[d] = Number(((count / total) * 100).toFixed(1));
+  const frequenciaDezenas = {};
+  const topFrequentes = [];
+  for (let dezena = 1; dezena <= 25; dezena += 1) {
+    const count = concursosOrdenados.filter(resultado => resultado.dezenas.includes(dezena)).length;
+    const percentual = Number(((count / total) * 100).toFixed(2));
+    frequenciaDezenas[dezena] = percentual;
+    topFrequentes.push({ dezena, ocorrencias: count, pct: percentual });
   }
+  topFrequentes.sort((a, b) => b.ocorrencias - a.ocorrencias || a.dezena - b.dezena);
 
   const atrasoAtual = {};
-  for (let d = 1; d <= 25; d++) {
+  for (let dezena = 1; dezena <= 25; dezena += 1) {
     let atraso = 0;
-    for (let i = resultados.length - 1; i >= 0; i--) {
-      if (resultados[i].dezenas.includes(d)) break;
-      atraso++;
+    for (let index = concursosOrdenados.length - 1; index >= 0; index -= 1) {
+      if (concursosOrdenados[index].dezenas.includes(dezena)) break;
+      atraso += 1;
     }
-    atrasoAtual[d] = atraso;
+    atrasoAtual[dezena] = atraso;
   }
 
   let recicTotal = 0;
-  for (let i = 1; i < resultados.length; i++) {
-    recicTotal += resultados[i].dezenas.filter(d => resultados[i - 1].dezenas.includes(d)).length;
+  for (let index = 1; index < concursosOrdenados.length; index += 1) {
+    recicTotal += concursosOrdenados[index].dezenas.filter(dezena => concursosOrdenados[index - 1].dezenas.includes(dezena)).length;
   }
-  const reciclagemMedia = Number((recicTotal / Math.max(1, resultados.length - 1)).toFixed(1));
+  const reciclagemMedia = Number((recicTotal / Math.max(1, concursosOrdenados.length - 1)).toFixed(1));
 
   const quadrantesMap = new Map();
-  resultados.forEach(r => {
-    const padrao = calcQuadrantesDeJogo(r.dezenas).join('-');
+  concursosOrdenados.forEach(resultado => {
+    const padrao = calcQuadrantesDeJogo(resultado.dezenas).join('-');
     quadrantesMap.set(padrao, (quadrantesMap.get(padrao) ?? 0) + 1);
   });
   const quadrantesOrdenados = [...quadrantesMap.entries()].sort((a, b) => b[1] - a[1]);
-  const topQuadrantes = quadrantesOrdenados.slice(0, 5).map(([padrao, count]) => ({ padrao, pct: pct(count, total) }));
+  const topQuadrantes = quadrantesOrdenados.slice(0, 5).map(([padrao, count]) => ({ padrao, pct: pct(count, total), ocorrencias: count }));
   const outrosCount = quadrantesOrdenados.slice(5).reduce((acc, [, count]) => acc + count, 0);
-  const quadrantesDistribuicao = outrosCount > 0 ? [...topQuadrantes, { padrao: 'outros', pct: pct(outrosCount, total) }] : topQuadrantes;
+  const quadrantesDistribuicao = outrosCount > 0
+    ? [...topQuadrantes, { padrao: 'outros', pct: pct(outrosCount, total), ocorrencias: outrosCount }]
+    : topQuadrantes;
 
-  const dps = resultados.map(r => calcDesvioPadrao(r.dezenas));
-  const desvioPadraoMedio = Number((dps.reduce((a, b) => a + b, 0) / total).toFixed(2));
+  const desvioPadraoMedio = media(dps, 2);
   const entropiaDistribuicao = DP_FAIXAS.map(item => ({
     faixa: item.faixa,
     pct: pct(dps.filter(dp => dp >= item.min && dp <= item.max).length, total),
     label: item.label,
   }));
 
-  const ciclosCompletos = [...new Set(comCiclos.filter(r => r.cicloFechado).map(r => r.ciclo))].length;
-  const cicloAtual = ultimo?.ciclo ?? 1;
-  const cicloAnterior = ultimo?.cicloFechado ? ultimo.ciclo : Math.max(0, cicloAtual - 1);
-  const dezenasFaltantesCiclo = ultimo?.cicloFechado
-    ? Array.from({ length: 25 }, (_, i) => i + 1)
-    : Array.from({ length: 25 }, (_, i) => i + 1).filter(d => !(ultimo?.dezenasVistasNoCiclo ?? []).includes(d));
   const tamanhoCicloMedio = Number((total / Math.max(1, ciclosCompletos)).toFixed(1));
-
   const janelas = {
-    '01+04': calcJanelaStats(resultados, [1, 4]),
-    '01+05': calcJanelaStats(resultados, [1, 5]),
+    '01+04': calcJanelaStats(concursosOrdenados, [1, 4]),
+    '01+05': calcJanelaStats(concursosOrdenados, [1, 5]),
   };
 
-  const janelaAtual = ultimo
-    ? ([1, 4].every(d => ultimo.dezenas.includes(d))
-        ? { tipo: '01-04', ...janelas['01+04'] }
-        : [1, 5].every(d => ultimo.dezenas.includes(d))
-          ? { tipo: '01-05', ...janelas['01+05'] }
-          : null)
+  const janelaAtual = ultimoResultado
+    ? ([1, 4].every(d => ultimoResultado.dezenas.includes(d))
+      ? { tipo: '01-04', ...janelas['01+04'] }
+      : [1, 5].every(d => ultimoResultado.dezenas.includes(d))
+        ? { tipo: '01-05', ...janelas['01+05'] }
+        : null)
     : null;
 
   return {
     totalConcursos: total,
-    cicloAnterior,
-    cicloAtual,
     ciclosCompletos,
-    tamanhoCicloMedio,
+    cicloAtual: numeroCicloAtual,
+    cicloAnterior: ultimoCicloFechado?.ciclo ?? Math.max(0, numeroCicloAtual - 1),
+    concursosNoCicloAtual,
+    dezenasJaSairamNoCicloAtual,
     dezenasFaltantesCiclo,
-    somaMedia,
-    somaMin,
-    somaMax,
+    tamanhoCicloMedio,
+    somaMedia: media(somaValores, 1),
+    somaMin: Math.min(...somaValores),
+    somaMax: Math.max(...somaValores),
     somaFaixas,
+    somaFaixaMaisRecorrente,
+    mediaPares: media(paresPorConcurso, 2),
+    mediaImpares: media(imparesPorConcurso, 2),
+    percentualMedioPares: Number(((media(paresPorConcurso, 4) / 15) * 100).toFixed(2)),
+    percentualMedioImpares: Number(((media(imparesPorConcurso, 4) / 15) * 100).toFixed(2)),
     paresDistribuicao,
-    frequenciaDezenas: freq,
+    padraoParesMaisRecorrente,
+    frequenciaDezenas,
+    topFrequentes: topFrequentes.slice(0, 10),
     atrasoAtual,
     reciclagemMedia,
     janelas,
@@ -240,8 +284,9 @@ function getHistorico(resultados) {
     desvioPadraoMedio,
     desvioPadraoIdeal: { min: 6.0, max: 8.5 },
     entropiaDistribuicao,
-    ultimoResultado: ultimo,
-    penultimoResultado: penultimo,
+    ultimoResultado,
+    penultimoResultado,
+    ultimoConcursoProcessado,
     ciclos: comCiclos,
   };
 }
@@ -257,11 +302,23 @@ function buildDashboard(resultados) {
       cicloAtual: historico.cicloAtual,
       cicloAnterior: historico.cicloAnterior,
       tamanhoCicloMedio: historico.tamanhoCicloMedio,
+      concursosNoCicloAtual: historico.concursosNoCicloAtual,
     },
+    totalConcursos: historico.totalConcursos,
+    ciclosCompletos: historico.ciclosCompletos,
+    cicloAtual: historico.cicloAtual,
+    cicloAnterior: historico.cicloAnterior,
+    mediaPorCiclo: historico.tamanhoCicloMedio,
+    tamanhoCicloMedio: historico.tamanhoCicloMedio,
+    dezenasFaltantesCiclo: historico.dezenasFaltantesCiclo,
+    dezenasJaSairamNoCicloAtual: historico.dezenasJaSairamNoCicloAtual,
+    concursosNoCicloAtual: historico.concursosNoCicloAtual,
     ciclo: {
       atual: historico.cicloAtual,
       anterior: historico.cicloAnterior,
       dezenasFaltantes: historico.dezenasFaltantesCiclo,
+      dezenasJaSairam: historico.dezenasJaSairamNoCicloAtual,
+      concursosNoCicloAtual: historico.concursosNoCicloAtual,
       tamanhoMedio: historico.tamanhoCicloMedio,
     },
     soma: {
@@ -269,9 +326,20 @@ function buildDashboard(resultados) {
       min: historico.somaMin,
       max: historico.somaMax,
       faixas: historico.somaFaixas,
+      faixaMaisRecorrente: historico.somaFaixaMaisRecorrente,
     },
-    pares: { distribuicao: historico.paresDistribuicao },
+    pares: {
+      distribuicao: historico.paresDistribuicao,
+      media: historico.mediaPares,
+      percentualMedio: historico.percentualMedioPares,
+      padraoMaisRecorrente: historico.padraoParesMaisRecorrente,
+    },
+    impares: {
+      media: historico.mediaImpares,
+      percentualMedio: historico.percentualMedioImpares,
+    },
     frequencias: historico.frequenciaDezenas,
+    topFrequentes: historico.topFrequentes,
     atrasos: historico.atrasoAtual,
     reciclagem: {
       media: historico.reciclagemMedia,

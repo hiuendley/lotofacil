@@ -291,17 +291,47 @@ function analisar(dezenas, contexto = {}) {
   const reprovados = filtros.filter(f => f.status === 'reprovado').length;
   const classificacao = classificarScore(score);
 
+  const percentualPares = Number(((pares / qtdSelecionadas) * 100).toFixed(2));
+  const percentualImpares = Number(((impares / qtdSelecionadas) * 100).toFixed(2));
+  const dezenasPendentesNoJogo = dezenas.filter(d => pendentes.includes(d));
+  const topAtrasadas = Object.entries(atrasos)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([dezena, atraso]) => ({ dezena: Number(dezena), atraso }));
+
   return {
     dezenas,
     quantidade: qtdSelecionadas,
     soma,
     pares,
     impares,
-    reciclagem,
+    percentualPares,
+    percentualImpares,
+    recicladas: reciclagem,
+    repetidosUltimoSorteio: reciclagem,
+    dezenasRepetidasUltimoSorteio: recicLista,
+    dezenasPendentesNoJogo,
     score,
     classificacao,
     resumo: { aprovados, atencao, reprovados, total: filtros.length },
     filtros,
+    estatisticas: {
+      soma,
+      pares,
+      impares,
+      percentualPares,
+      percentualImpares,
+      repetidosUltimoSorteio: reciclagem,
+      dezenasRepetidasUltimoSorteio: recicLista,
+      mediaFaixaMaisRecorrente: historico.somaFaixaMaisRecorrente ?? null,
+      padraoParesMaisRecorrente: historico.padraoParesMaisRecorrente ?? null,
+      cicloAtual: historico.cicloAtual ?? null,
+      dezenasPendentesNoJogo,
+      topAtrasadas,
+      mediaFrequenciaJogo: mediaFreqJogo,
+      desvioPadrao: dpRound,
+      quadrantes,
+    },
     referencia: { concursoRef, ultimasDezenas },
   };
 }
